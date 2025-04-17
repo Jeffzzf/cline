@@ -88,6 +88,7 @@ import {
 import { getGlobalState } from "../storage/state"
 import WorkspaceTracker from "../../integrations/workspace/WorkspaceTracker"
 import { McpHub } from "../../services/mcp/McpHub"
+import { AutoConversationRefresh } from "../context/context-management/AutoConversationRefresh"
 
 export const cwd =
 	vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0) ?? path.join(os.homedir(), "Desktop") // may or may not exist but fs checking existence would immediately ask for permission which would be bad UX, need to come up with a better solution
@@ -155,6 +156,9 @@ export class Task {
 	private didCompleteReadingStream = false
 	private didAutomaticallyRetryFailedApiRequest = false
 
+	// AutoConversationRefresh
+	private autoConversationRefresh: AutoConversationRefresh
+
 	constructor(
 		context: vscode.ExtensionContext,
 		mcpHub: McpHub,
@@ -194,6 +198,7 @@ export class Task {
 		this.autoApprovalSettings = autoApprovalSettings
 		this.browserSettings = browserSettings
 		this.chatSettings = chatSettings
+		this.autoConversationRefresh = new AutoConversationRefresh(10, 0.7) // Max 10 refreshes, 70% threshold
 
 		// Initialize taskId first
 		if (historyItem) {
@@ -828,6 +833,9 @@ export class Task {
 	// Task lifecycle
 
 	private async startTask(task?: string, images?: string[]): Promise<void> {
+		// Reset the conversation refresh counter when starting a new task
+		this.autoConversationRefresh.reset()
+		
 		// conversationHistory (for API) and clineMessages (for webview) need to be in sync
 		// if the extension process were killed, then on restart the clineMessages might not be empty, so we need to set it to [] when we create a new Cline client (otherwise webview would show stale messages from previous session)
 		this.clineMessages = []
@@ -1264,6 +1272,41 @@ export class Task {
 	}
 
 	async *attemptApiRequest(previousApiReqIndex: number): ApiStream {
+		// Wait for MCP servers to connect if applicable
+		await pWaitFor(() => this.mcpHub.isConnecting !== true)
+
+		// Check if we need to refresh the conversation due to token limit
+		if (this.autoConversationRefresh.shouldRefreshConversation(this.clineMessages, previousApiReqIndex, this.api)) {
+			// Create a summary of the current conversation
+			const summary = this.autoConversationRefresh.createConversationSummary(this.apiConversationHistory)
+			
+			// Notify user about the conversation refresh
+			yield { type: "text", text: "Conversation token limit reached. Starting new conversation..." }
+			
+			// Start a new task with the summary
+			await this.startNewConversationWithSummary(summary)
+			
+			// Return empty stream - no more processing needed
+			return
+		}
+
+		// Get updated context messages and metadata
+		const { conversationHistoryDeletedRange, updatedConversationHistoryDeletedRange, truncatedConversationHistory } =
+			await this.contextManager.getNewContextMessagesAndMetadata(
+				this.apiConversationHistory,
+				this.clineMessages,
+				this.api,
+				this.conversationHistoryDeletedRange,
+				previousApiReqIndex,
+				await ensureTaskDirectoryExists(this.getContext(), this.taskId),
+			)
+
+		// Update conversation history deleted range if it changed
+		if (updatedConversationHistoryDeletedRange) {
+			this.conversationHistoryDeletedRange = conversationHistoryDeletedRange
+			await this.saveClineMessagesAndUpdateHistory() // saves task history item which we use to keep track of conversation history deleted range
+		}
+
 		// Wait for MCP servers to be connected before generating system prompt
 		await pWaitFor(() => this.mcpHub.isConnecting !== true, { timeout: 10_000 }).catch(() => {
 			console.error("MCP servers failed to connect in time")
@@ -1314,21 +1357,8 @@ export class Task {
 				preferredLanguageInstructions,
 			)
 		}
-		const contextManagementMetadata = await this.contextManager.getNewContextMessagesAndMetadata(
-			this.apiConversationHistory,
-			this.clineMessages,
-			this.api,
-			this.conversationHistoryDeletedRange,
-			previousApiReqIndex,
-			await ensureTaskDirectoryExists(this.getContext(), this.taskId),
-		)
 
-		if (contextManagementMetadata.updatedConversationHistoryDeletedRange) {
-			this.conversationHistoryDeletedRange = contextManagementMetadata.conversationHistoryDeletedRange
-			await this.saveClineMessagesAndUpdateHistory() // saves task history item which we use to keep track of conversation history deleted range
-		}
-
-		let stream = this.api.createMessage(systemPrompt, contextManagementMetadata.truncatedConversationHistory)
+		let stream = this.api.createMessage(systemPrompt, truncatedConversationHistory)
 
 		const iterator = stream[Symbol.asyncIterator]()
 
@@ -1440,7 +1470,7 @@ export class Task {
 					// (have to do this for partial and complete since sending content in thinking tags to markdown renderer will automatically be removed)
 					// Remove end substrings of <thinking or </thinking (below xml parsing is only for opening tags)
 					// (this is done with the xml parsing below now, but keeping here for reference)
-					// content = content.replace(/<\/?t(?:h(?:i(?:n(?:k(?:i(?:n(?:g)?)?)?)?)?)?)?$/, "")
+					// content = content.replace(/<\/?t(?:h(?:i(?:n(?:k(?:i(?:n(?:g)?)?)?)?$/, "")
 					// Remove all instances of <thinking> (with optional line break after) and </thinking> (with optional line break before)
 					// - Needs to be separate since we dont want to remove the line break before the first tag
 					// - Needs to happen before the xml parsing below
@@ -3761,5 +3791,45 @@ export class Task {
 		}
 
 		return `<environment_details>\n${details.trim()}\n</environment_details>`
+	}
+
+	/**
+	 * Start a new conversation with a summary of the current one
+	 * @param summary Summary of the current conversation
+	 */
+	private async startNewConversationWithSummary(summary: string): Promise<void> {
+		// Notify user about the conversation refresh
+		await this.say("text", "The conversation has reached 70% of the token limit. Starting a new conversation to continue.")
+		
+		// Save current task state
+		await this.saveClineMessagesAndUpdateHistory()
+		
+		// Store current state to resume properly
+		const currentTaskId = this.taskId
+		const refreshCount = this.autoConversationRefresh.getRefreshCount()
+		
+		try {
+			// Create a new task through the controller
+			await this.postMessageToWebview({
+				type: "action",
+				action: "chatButtonClicked",
+			})
+			
+			// Wait a moment for the UI to update
+			await setTimeoutPromise(500)
+			
+			// Start the new task with the summary
+			await this.say("text", summary)
+			
+			// Add info about the refresh count
+			const refreshMessage = `This is continuation #${refreshCount} of the original conversation. ${refreshCount >= 10 ? "This is the maximum allowed automatic continuation." : ""}`
+			await this.say("text", refreshMessage)
+		} catch (error) {
+			console.error("Error starting new conversation:", error)
+			
+			// If there was an error, try to restore the original task
+			await this.reinitExistingTaskFromId(currentTaskId)
+			await this.say("text", "Error starting new conversation. Continuing with the current one.")
+		}
 	}
 }
