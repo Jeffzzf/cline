@@ -1,9 +1,12 @@
 import * as fs from "fs/promises"
 import * as path from "path"
+import * as vscode from "vscode"
+import Parser from "web-tree-sitter"
 import { listFiles } from "../glob/list-files"
 import { LanguageParser, loadRequiredLanguageParsers } from "./languageParser"
 import { fileExistsAtPath } from "../../utils/fs"
 import { ClineIgnoreController } from "../../core/ignore/ClineIgnoreController"
+import { readFileWithEncoding } from "../../utils/file-encoding"
 
 // TODO: implement caching behavior to avoid having to keep analyzing project for new tasks.
 export async function parseSourceCodeForDefinitionsTopLevel(
@@ -116,7 +119,7 @@ async function parseFile(
 	if (clineIgnoreController && !clineIgnoreController.validateAccess(filePath)) {
 		return null
 	}
-	const fileContent = await fs.readFile(filePath, "utf8")
+	const fileContent = await readFileWithEncoding(filePath)
 	const ext = path.extname(filePath).toLowerCase().slice(1)
 
 	const { parser, query } = languageParsers[ext] || {}
