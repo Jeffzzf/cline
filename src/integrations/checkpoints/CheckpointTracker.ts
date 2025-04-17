@@ -5,6 +5,7 @@ import * as vscode from "vscode"
 import { telemetryService } from "../../services/telemetry/TelemetryService"
 import { GitOperations } from "./CheckpointGitOperations"
 import { getShadowGitPath, getWorkingDirectory, hashWorkingDir } from "./CheckpointUtils"
+import { readFileWithEncoding } from "../../utils/file-encoding"
 
 /**
  * CheckpointTracker Module
@@ -319,8 +320,9 @@ class CheckpointTracker {
 					// file didn't exist in newer commit => remains empty
 				}
 			} else {
+				// otherwise, read from disk (includes uncommitted changes)
 				try {
-					afterContent = await fs.readFile(absolutePath, "utf8")
+					afterContent = await readFileWithEncoding(absolutePath)
 				} catch (_) {
 					// file might be deleted => remains empty
 				}

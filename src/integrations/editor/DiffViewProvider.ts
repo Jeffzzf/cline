@@ -7,6 +7,7 @@ import { formatResponse } from "../../core/prompts/responses"
 import { DecorationController } from "./DecorationController"
 import * as diff from "diff"
 import { diagnosticsToProblemsString, getNewDiagnostics } from "../diagnostics"
+import { readFileWithEncoding } from "../../utils/file-encoding"
 
 export const DIFF_VIEW_URI_SCHEME = "cline-diff"
 
@@ -43,7 +44,7 @@ export class DiffViewProvider {
 		this.preDiagnostics = vscode.languages.getDiagnostics()
 
 		if (fileExists) {
-			this.originalContent = await fs.readFile(absolutePath, "utf-8")
+			this.originalContent = await readFileWithEncoding(absolutePath)
 		} else {
 			this.originalContent = ""
 		}

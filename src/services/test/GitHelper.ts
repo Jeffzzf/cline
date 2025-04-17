@@ -3,6 +3,7 @@ import * as vscode from "vscode"
 import { execa } from "execa"
 import { Logger } from "../../services/logging/Logger"
 import { WebviewProvider } from "../../core/webview"
+import { readFileWithEncoding } from "../../utils/file-encoding"
 
 /**
  * Gets a valid workspace path for Git operations
@@ -153,6 +154,7 @@ export async function getFileChanges(workspacePath: string): Promise<{
 	modified: string[]
 	deleted: string[]
 	diff: string
+	fileContents: Map<string, string>
 }> {
 	// Validate workspace path before proceeding
 	await validateWorkspacePath(workspacePath)
@@ -213,11 +215,23 @@ export async function getFileChanges(workspacePath: string): Promise<{
 			Logger.log(`Unstaged git diff output length: ${unstaged.length} characters`)
 		}
 
+		// Read file contents with proper encoding
+		const fileContents = new Map<string, string>()
+		for (const file of [...created, ...modified]) {
+			try {
+				const content = await readFileWithEncoding(path.join(workspacePath, file))
+				fileContents.set(file, content)
+			} catch (error) {
+				Logger.log(`Error reading file ${file}: ${error}`)
+			}
+		}
+
 		return {
 			created,
 			modified,
 			deleted,
 			diff: finalDiff,
+			fileContents
 		}
 	} catch (error) {
 		// Throw the error instead of returning a fallback
