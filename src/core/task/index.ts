@@ -835,7 +835,7 @@ export class Task {
 	private async startTask(task?: string, images?: string[]): Promise<void> {
 		// Reset the conversation refresh counter when starting a new task
 		this.autoConversationRefresh.reset()
-		
+
 		// conversationHistory (for API) and clineMessages (for webview) need to be in sync
 		// if the extension process were killed, then on restart the clineMessages might not be empty, so we need to set it to [] when we create a new Cline client (otherwise webview would show stale messages from previous session)
 		this.clineMessages = []
@@ -1279,13 +1279,13 @@ export class Task {
 		if (this.autoConversationRefresh.shouldRefreshConversation(this.clineMessages, previousApiReqIndex, this.api)) {
 			// Create a summary of the current conversation
 			const summary = this.autoConversationRefresh.createConversationSummary(this.apiConversationHistory)
-			
+
 			// Notify user about the conversation refresh
 			yield { type: "text", text: "Conversation token limit reached. Starting new conversation..." }
-			
+
 			// Start a new task with the summary
 			await this.startNewConversationWithSummary(summary)
-			
+
 			// Return empty stream - no more processing needed
 			return
 		}
@@ -3800,33 +3800,33 @@ export class Task {
 	private async startNewConversationWithSummary(summary: string): Promise<void> {
 		// Notify user about the conversation refresh
 		await this.say("text", "The conversation has reached 70% of the token limit. Starting a new conversation to continue.")
-		
+
 		// Save current task state
 		await this.saveClineMessagesAndUpdateHistory()
-		
+
 		// Store current state to resume properly
 		const currentTaskId = this.taskId
 		const refreshCount = this.autoConversationRefresh.getRefreshCount()
-		
+
 		try {
 			// Create a new task through the controller
 			await this.postMessageToWebview({
 				type: "action",
 				action: "chatButtonClicked",
 			})
-			
+
 			// Wait a moment for the UI to update
 			await setTimeoutPromise(500)
-			
+
 			// Start the new task with the summary
 			await this.say("text", summary)
-			
+
 			// Add info about the refresh count
 			const refreshMessage = `This is continuation #${refreshCount} of the original conversation. ${refreshCount >= 10 ? "This is the maximum allowed automatic continuation." : ""}`
 			await this.say("text", refreshMessage)
 		} catch (error) {
 			console.error("Error starting new conversation:", error)
-			
+
 			// If there was an error, try to restore the original task
 			await this.reinitExistingTaskFromId(currentTaskId)
 			await this.say("text", "Error starting new conversation. Continuing with the current one.")

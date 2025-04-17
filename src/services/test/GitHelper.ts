@@ -231,7 +231,7 @@ export async function getFileChanges(workspacePath: string): Promise<{
 			modified,
 			deleted,
 			diff: finalDiff,
-			fileContents
+			fileContents,
 		}
 	} catch (error) {
 		// Throw the error instead of returning a fallback
