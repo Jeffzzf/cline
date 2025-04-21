@@ -73,6 +73,7 @@ export async function getAllExtensionState(context: vscode.ExtensionContext) {
 		openAiApiKey,
 		openAiModelId,
 		openAiModelInfo,
+		openAiHeaders,
 		ollamaModelId,
 		ollamaBaseUrl,
 		ollamaApiOptionsCtxNum,
@@ -80,6 +81,7 @@ export async function getAllExtensionState(context: vscode.ExtensionContext) {
 		lmStudioBaseUrl,
 		anthropicBaseUrl,
 		geminiApiKey,
+		geminiBaseUrl,
 		openAiNativeApiKey,
 		deepSeekApiKey,
 		requestyApiKey,
@@ -144,6 +146,7 @@ export async function getAllExtensionState(context: vscode.ExtensionContext) {
 		getSecret(context, "openAiApiKey") as Promise<string | undefined>,
 		getGlobalState(context, "openAiModelId") as Promise<string | undefined>,
 		getGlobalState(context, "openAiModelInfo") as Promise<ModelInfo | undefined>,
+		getGlobalState(context, "openAiHeaders") as Promise<Record<string, string> | undefined>,
 		getGlobalState(context, "ollamaModelId") as Promise<string | undefined>,
 		getGlobalState(context, "ollamaBaseUrl") as Promise<string | undefined>,
 		getGlobalState(context, "ollamaApiOptionsCtxNum") as Promise<string | undefined>,
@@ -151,6 +154,7 @@ export async function getAllExtensionState(context: vscode.ExtensionContext) {
 		getGlobalState(context, "lmStudioBaseUrl") as Promise<string | undefined>,
 		getGlobalState(context, "anthropicBaseUrl") as Promise<string | undefined>,
 		getSecret(context, "geminiApiKey") as Promise<string | undefined>,
+		getGlobalState(context, "geminiBaseUrl") as Promise<string | undefined>,
 		getSecret(context, "openAiNativeApiKey") as Promise<string | undefined>,
 		getSecret(context, "deepSeekApiKey") as Promise<string | undefined>,
 		getSecret(context, "requestyApiKey") as Promise<string | undefined>,
@@ -256,6 +260,7 @@ export async function getAllExtensionState(context: vscode.ExtensionContext) {
 			openAiApiKey,
 			openAiModelId,
 			openAiModelInfo,
+			openAiHeaders: openAiHeaders || {},
 			ollamaModelId,
 			ollamaBaseUrl,
 			ollamaApiOptionsCtxNum,
@@ -263,6 +268,7 @@ export async function getAllExtensionState(context: vscode.ExtensionContext) {
 			lmStudioBaseUrl,
 			anthropicBaseUrl,
 			geminiApiKey,
+			geminiBaseUrl,
 			openAiNativeApiKey,
 			deepSeekApiKey,
 			requestyApiKey,
@@ -334,6 +340,7 @@ export async function updateApiConfiguration(context: vscode.ExtensionContext, a
 		openAiApiKey,
 		openAiModelId,
 		openAiModelInfo,
+		openAiHeaders,
 		ollamaModelId,
 		ollamaBaseUrl,
 		ollamaApiOptionsCtxNum,
@@ -341,6 +348,7 @@ export async function updateApiConfiguration(context: vscode.ExtensionContext, a
 		lmStudioBaseUrl,
 		anthropicBaseUrl,
 		geminiApiKey,
+		geminiBaseUrl,
 		openAiNativeApiKey,
 		deepSeekApiKey,
 		requestyApiKey,
@@ -389,6 +397,7 @@ export async function updateApiConfiguration(context: vscode.ExtensionContext, a
 	await storeSecret(context, "openAiApiKey", openAiApiKey)
 	await updateGlobalState(context, "openAiModelId", openAiModelId)
 	await updateGlobalState(context, "openAiModelInfo", openAiModelInfo)
+	await updateGlobalState(context, "openAiHeaders", openAiHeaders || {})
 	await updateGlobalState(context, "ollamaModelId", ollamaModelId)
 	await updateGlobalState(context, "ollamaBaseUrl", ollamaBaseUrl)
 	await updateGlobalState(context, "ollamaApiOptionsCtxNum", ollamaApiOptionsCtxNum)
@@ -396,6 +405,7 @@ export async function updateApiConfiguration(context: vscode.ExtensionContext, a
 	await updateGlobalState(context, "lmStudioBaseUrl", lmStudioBaseUrl)
 	await updateGlobalState(context, "anthropicBaseUrl", anthropicBaseUrl)
 	await storeSecret(context, "geminiApiKey", geminiApiKey)
+	await updateGlobalState(context, "geminiBaseUrl", geminiBaseUrl)
 	await storeSecret(context, "openAiNativeApiKey", openAiNativeApiKey)
 	await storeSecret(context, "deepSeekApiKey", deepSeekApiKey)
 	await storeSecret(context, "requestyApiKey", requestyApiKey)
